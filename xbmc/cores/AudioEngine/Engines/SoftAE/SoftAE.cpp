@@ -1127,11 +1127,12 @@ bool CSoftAE::FinalizeSamples(float *buffer, unsigned int samples, bool hasAudio
 
   /* check if we need to clamp */
   bool clamp = false;
-  float *fbuffer = buffer;
+  float clamp_value, *fbuffer = buffer;
   for (unsigned int i = 0; i < samples; i++, fbuffer++)
   {
     if (*fbuffer < -1.0f || *fbuffer > 1.0f)
     {
+      clamp_value = *fbuffer;
       clamp = true;
       break;
     }
@@ -1141,7 +1142,7 @@ bool CSoftAE::FinalizeSamples(float *buffer, unsigned int samples, bool hasAudio
   if (!clamp)
     return true;
 
-  CLog::Log(LOGDEBUG, "CSoftAE::FinalizeSamples - Clamping buffer of %d samples", samples);
+  CLog::Log(LOGDEBUG, "CSoftAE::FinalizeSamples - Clamping buffer of %d samples, clamp value(%f)", samples, clamp_value);
   CAEUtil::ClampArray(buffer, samples);
   return true;
 }
