@@ -333,7 +333,7 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
   snd_pcm_uframes_t periodSize, bufferSize;
   snd_pcm_hw_params_get_buffer_size_max(hw_params, &bufferSize);
 
-  bufferSize  = std::min(bufferSize, (snd_pcm_uframes_t)8192);
+  bufferSize  = std::max(bufferSize, (snd_pcm_uframes_t)8192);
   periodSize  = bufferSize / ALSA_PERIODS;
   periods     = ALSA_PERIODS;
 
