@@ -88,6 +88,16 @@ bool CAESinkAUDIOTRACK::Initialize(AEAudioFormat &format, std::string &device)
 {
   m_format = format;
 
+  if (AE_IS_RAW(format.m_dataFormat))
+    m_passthrough = true;
+  else
+    m_passthrough = false;
+
+#if defined(HAS_LIBAMCODEC)
+  if (aml_present())
+    aml_set_audio_passthrough(m_passthrough);
+#endif
+
   // default to 44100, all android devices support it.
   // then check if we can support the requested rate.
   unsigned int sampleRate = 44100;
@@ -231,7 +241,8 @@ bool CAESinkAUDIOTRACK::HasVolume()
 void  CAESinkAUDIOTRACK::SetVolume(float volume)
 {
   m_volume = volume;
-  m_volume_changed = true;
+  if (!m_passthrough)
+    m_volume_changed = true;
 }
 
 void CAESinkAUDIOTRACK::EnumerateDevicesEx(AEDeviceInfoList &list)
@@ -263,7 +274,38 @@ void CAESinkAUDIOTRACK::Process()
 
   JNIEnv *jenv = NULL;
   CXBMCApp::AttachCurrentThread(&jenv, NULL);
+/*
+  in Java
+  AudioManager audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+  int cur_volume = mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+  int max_volume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+  mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, max_volume, 0);
+*/
 
+/*
+  jobject oActivity = state->activity->clazz;
+  jclass cActivity = env->GetObjectClass(oActivity);
+
+  jmethodID jmGetSystemService = jenv->GetMethodID(cActivity, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+  jstring   jsAudioService = jenv->NewStringUTF("audio");
+  jobject   joAudioManager = jenv->CallObjectMethod(oActivity, jmGetSystemService, jsAudioService);
+  jclass    jcAudioManager = jenv->GetObjectClass(joAudioManager);
+
+  jmethodID jm_getStreamVolume    = jenv->GetMethodID(jcAudioManager, "getStreamVolume", "(I)I");
+  jmethodID jm_setStreamVolume    = jenv->GetMethodID(jcAudioManager, "setStreamVolume", "(III)V");
+  jmethodID jm_getStreamMaxVolume = jenv->GetMethodID(jcAudioManager, "getStreamMaxVolume", "(I)I");
+
+  jint flags = 0;
+  jint stream_music  = GetStaticIntField(jenv, "AudioManager", "STREAM_MUSIC");
+  jint stream_system = GetStaticIntField(jenv, "AudioManager", "STREAM_SYSTEM");
+  jint cur_volume = jenv->CallIntMethod(joAudioManager, jm_getStreamVolume, stream_music);
+  jint max_volume = jenv->CallIntMethod(joAudioManager, jm_getStreamMaxVolume, stream_music);
+  jenv->CallIntMethod(joAudioManager, jm_setStreamVolume, stream_music, max_volume, flags);
+
+  env->DeleteLocalRef(jsAudioService);
+  env->DeleteLocalRef(joAudioManager);
+  env->DeleteLocalRef(jcAudioManager);
+*/
   jclass jcAudioTrack = jenv->FindClass("android/media/AudioTrack");
 
   jmethodID jmInit              = jenv->GetMethodID(jcAudioTrack, "<init>", "(IIIIII)V");
@@ -302,6 +344,12 @@ void CAESinkAUDIOTRACK::Process()
     min_buffer_size,
     GetStaticIntField(jenv, "AudioTrack", "MODE_STREAM"));
 
+  // Set the initial volume
+  jfloat jvolume = 1.0;
+  if (!m_passthrough)
+    jvolume = m_volume;
+  jenv->CallIntMethod(joAudioTrack, jmSetStereoVolume, jvolume, jvolume);
+
   // The AudioTrack object has been created and waiting to play,
   m_inited.Set();
   // yield to give other threads a chance to do some work.
@@ -318,7 +366,7 @@ void CAESinkAUDIOTRACK::Process()
 
   while (!m_bStop)
   {
-    if (m_volume_changed)
+    if (m_volume_changed && !m_passthrough)
     {
       // check of volume changes and make them,
       // do it here to keep jni calls local to this thread.
