@@ -145,7 +145,7 @@ IAESink *CSoftAE::GetSink(AEAudioFormat &newFormat, bool passthrough, std::strin
 }
 
 /* this method MUST be called while holding m_streamLock */
-inline CSoftAEStream *CSoftAE::GetMasterStream()
+CSoftAEStream *CSoftAE::GetMasterStream()
 {
   /* remove any destroyed streams first */
   for (StreamList::iterator itt = m_streams.begin(); itt != m_streams.end();)
@@ -616,7 +616,7 @@ void CSoftAE::VerifySoundDevice(std::string& device, bool passthrough)
   device = firstDevice;
 }
 
-inline void CSoftAE::GetDeviceFriendlyName(std::string &device)
+void CSoftAE::GetDeviceFriendlyName(std::string &device)
 {
   m_deviceFriendlyName = "Device not found";
   /* Match the device and find its friendly name */
@@ -1369,7 +1369,7 @@ unsigned int CSoftAE::RunStreamStage(unsigned int channelCount, void *out, bool 
   return mixed;
 }
 
-inline void CSoftAE::ResumeSlaveStreams(const StreamList &streams)
+void CSoftAE::ResumeSlaveStreams(const StreamList &streams)
 {
   if (streams.empty())
     return;
@@ -1384,7 +1384,7 @@ inline void CSoftAE::ResumeSlaveStreams(const StreamList &streams)
   }
 }
 
-inline void CSoftAE::RemoveStream(StreamList &streams, CSoftAEStream *stream)
+void CSoftAE::RemoveStream(StreamList &streams, CSoftAEStream *stream)
 {
   StreamList::iterator f = std::find(streams.begin(), streams.end(), stream);
   if (f != streams.end())
@@ -1394,7 +1394,7 @@ inline void CSoftAE::RemoveStream(StreamList &streams, CSoftAEStream *stream)
     m_streamsPlaying = !m_playingStreams.empty();
 }
 
-inline void CSoftAE::ProcessSuspend()
+void CSoftAE::ProcessSuspend()
 {
   bool sinkIsSuspended = false;
   unsigned int curSystemClock = 0;
