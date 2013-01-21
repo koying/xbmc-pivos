@@ -1434,7 +1434,8 @@ void CSoftAE::ProcessSuspend()
     }
 
     /* idle for platform-defined time */
-    m_wake.WaitMSec(SOFTAE_IDLE_WAIT_MSEC);
+    if (m_playingStreams.empty() && m_playing_sounds.empty())
+      m_wake.WaitMSec(SOFTAE_IDLE_WAIT_MSEC);
 
     /* check if we need to resume for stream or sound */
     if (!m_isSuspended && (!m_playingStreams.empty() || !m_playing_sounds.empty()))
