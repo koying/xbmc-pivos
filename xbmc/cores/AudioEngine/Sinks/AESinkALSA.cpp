@@ -270,6 +270,7 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
       break;
     case 8000:
     case 16000:
+    case 24000:
     case 32000:
     case 96000:
       sampleRate = 48000;
