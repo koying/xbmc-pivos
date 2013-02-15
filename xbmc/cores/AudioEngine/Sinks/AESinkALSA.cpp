@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2012 Team XBMC
+ *      Copyright (C) 2010-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -79,7 +79,7 @@ CAESinkALSA::~CAESinkALSA()
   Deinitialize();
 }
 
-CAEChannelInfo CAESinkALSA::GetChannelLayout(AEAudioFormat format)
+inline CAEChannelInfo CAESinkALSA::GetChannelLayout(AEAudioFormat format)
 {
   unsigned int count = 0;
 
@@ -278,7 +278,6 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
   }
 #endif
   unsigned int channelCount = format.m_channelLayout.Count();
-
   snd_pcm_hw_params_set_rate_near    (m_pcm, hw_params, &sampleRate, NULL);
   snd_pcm_hw_params_set_channels_near(m_pcm, hw_params, &channelCount);
 
@@ -352,7 +351,7 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
   snd_pcm_uframes_t periodSize, bufferSize;
   snd_pcm_hw_params_get_buffer_size_max(hw_params, &bufferSize);
 
-  bufferSize  = std::max(bufferSize, (snd_pcm_uframes_t)8192);
+  bufferSize  = std::min(bufferSize, (snd_pcm_uframes_t)8192);
   periodSize  = bufferSize / ALSA_PERIODS;
   periods     = ALSA_PERIODS;
 
@@ -445,7 +444,6 @@ void CAESinkALSA::Deinitialize()
 
   if (m_pcm)
   {
-    snd_pcm_drop (m_pcm);
     snd_pcm_close(m_pcm);
     m_pcm = NULL;
   }
@@ -506,7 +504,13 @@ double CAESinkALSA::GetCacheTotal()
 unsigned int CAESinkALSA::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio)
 {
   if (!m_pcm)
-    return 0;
+  {
+    SoftResume();
+    if(!m_pcm)
+      return 0;
+
+    CLog::Log(LOGDEBUG, "CAESinkALSA - the grAEken is hunger, feed it (I am the downmost fallback - fix your code)");
+  }
 
   int ret;
 
@@ -569,29 +573,6 @@ void CAESinkALSA::HandleError(const char* name, int err)
       CLog::Log(LOGERROR, "CAESinkALSA::HandleError(%s) - snd_pcm_writei returned %d (%s)", name, err, snd_strerror(err));
       break;
   }
-}
-
-bool CAESinkALSA::SoftSuspend()
-{
-  /* Sink has been asked to suspend output - we release audio   */
-  /* device as we are in exclusive mode and thus allow external */
-  /* audio sources to play. This requires us to reinitialize    */
-  /* on resume.                                                 */
-  CLog::Log(LOGDEBUG, "CAESinkALSA::SoftSuspend");
-
-  Deinitialize();
-
-  return true;
-}
-
-bool CAESinkALSA::SoftResume()
-{
-  /* Sink asked to resume output. To release audio device in    */
-  /* exclusive mode we release the device context and therefore */
-  /* must reinitialize. Return false to force re-init by engine */
-  CLog::Log(LOGDEBUG, "CAESinkALSA::SoftResume");
-
-  return false;
 }
 
 void CAESinkALSA::Drain()
@@ -718,12 +699,17 @@ bool CAESinkALSA::OpenPCMDevice(const std::string &name, const std::string &para
   return false;
 }
 
-void CAESinkALSA::EnumerateDevicesEx(AEDeviceInfoList &list)
+void CAESinkALSA::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
 {
   /* ensure that ALSA has been initialized */
   snd_lib_error_set_handler(sndLibErrorHandler);
-  if(!snd_config)
+  if(!snd_config || force)
+  {
+    if(force)
+      snd_config_update_free_global();
+
     snd_config_update();
+  }
 
   snd_config_t *config;
   snd_config_copy(&config, snd_config);
@@ -1165,6 +1151,28 @@ bool CAESinkALSA::GetELD(snd_hctl_t *hctl, int device, CAEDeviceInfo& info, bool
 
   info.m_deviceType = AE_DEVTYPE_HDMI;
   return true;
+}
+
+bool CAESinkALSA::SoftSuspend()
+{
+  if(m_pcm) // it is still there
+   Deinitialize();
+
+  return true;
+}
+bool CAESinkALSA::SoftResume()
+{
+    // reinit all the clibber
+    bool ret = true; // all fine
+    if(!m_pcm)
+    {
+      if (!snd_config)
+        snd_config_update();
+
+      ret = Initialize(m_initFormat, m_initDevice);
+    }
+   //we want that AE loves us again - reinit when initialize failed
+   return ret; // force reinit if false
 }
 
 void CAESinkALSA::sndLibErrorHandler(const char *file, int line, const char *function, int err, const char *fmt, ...)

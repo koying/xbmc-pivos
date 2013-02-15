@@ -1,5 +1,5 @@
  /*
- *      Copyright (C) 2010-2012 Team XBMC
+ *      Copyright (C) 2010-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -238,14 +238,16 @@ bool CAESinkAUDIOTRACK::HasVolume()
   return true;
 }
 
-void  CAESinkAUDIOTRACK::SetVolume(float volume)
+void  CAESinkAUDIOTRACK::SetVolume(float scale)
 {
-  m_volume = volume;
+  // Android uses fixed steps, reverse scale back to percent
+  float gain = CAEUtil::ScaleToGain(scale);
+  m_volume = CAEUtil::GainToPercent(gain);
   if (!m_passthrough)
-    m_volume_changed = true;
+  	m_volume_changed = true;
 }
 
-void CAESinkAUDIOTRACK::EnumerateDevicesEx(AEDeviceInfoList &list)
+void CAESinkAUDIOTRACK::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
 {
   m_info.m_channels.Reset();
   m_info.m_dataFormats.clear();
@@ -284,7 +286,6 @@ void CAESinkAUDIOTRACK::Process()
   jmethodID jmRelease           = jenv->GetMethodID(jcAudioTrack, "release", "()V");
   jmethodID jmWrite             = jenv->GetMethodID(jcAudioTrack, "write", "([BII)I");
   jmethodID jmPlayState         = jenv->GetMethodID(jcAudioTrack, "getPlayState", "()I");
-  jmethodID jmSetStereoVolume   = jenv->GetMethodID(jcAudioTrack, "setStereoVolume", "(FF)I");
   jmethodID jmPlayHeadPosition  = jenv->GetMethodID(jcAudioTrack, "getPlaybackHeadPosition", "()I");
   jmethodID jmGetMinBufferSize  = jenv->GetStaticMethodID(jcAudioTrack, "getMinBufferSize", "(III)I");
 
@@ -314,10 +315,10 @@ void CAESinkAUDIOTRACK::Process()
     GetStaticIntField(jenv, "AudioTrack", "MODE_STREAM"));
 
   // Set the initial volume
-  jfloat jvolume = 1.0;
+  float volume = 1.0;
   if (!m_passthrough)
-    jvolume = m_volume;
-  jenv->CallIntMethod(joAudioTrack, jmSetStereoVolume, jvolume, jvolume);
+    volume = m_volume;
+  CXBMCApp::SetSystemVolume(jenv, volume);
 
   // The AudioTrack object has been created and waiting to play,
   m_inited.Set();
@@ -339,8 +340,7 @@ void CAESinkAUDIOTRACK::Process()
     {
       // check of volume changes and make them,
       // do it here to keep jni calls local to this thread.
-      jfloat jvolume = m_volume;
-      jenv->CallIntMethod(joAudioTrack, jmSetStereoVolume, jvolume, jvolume);
+      CXBMCApp::SetSystemVolume(jenv, m_volume);
       m_volume_changed = false;
     }
     if (m_draining)

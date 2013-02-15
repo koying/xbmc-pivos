@@ -1,6 +1,6 @@
 #pragma once
 /*
- *      Copyright (C) 2010-2012 Team XBMC
+ *      Copyright (C) 2010-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -42,8 +42,8 @@ public:
   virtual unsigned int AddPackets      (uint8_t *data, unsigned int frames, bool hasAudio);
   virtual void         Drain           ();
   virtual bool         HasVolume       ();
-  virtual void         SetVolume       (float volume);
-  static void          EnumerateDevicesEx(AEDeviceInfoList &list);
+  virtual void         SetVolume       (float scale);
+  static void          EnumerateDevicesEx(AEDeviceInfoList &list, bool force = false);
 
 private:
   virtual void Process();
