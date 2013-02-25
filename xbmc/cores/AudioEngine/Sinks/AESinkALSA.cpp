@@ -266,6 +266,7 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
     case 11025:
     case 22050:
     case 88200:
+    case 176400:
       sampleRate = 44100;
       break;
     case 8000:
@@ -273,6 +274,8 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
     case 24000:
     case 32000:
     case 96000:
+    case 192000:
+    case 384000:
       sampleRate = 48000;
       break;
   }
