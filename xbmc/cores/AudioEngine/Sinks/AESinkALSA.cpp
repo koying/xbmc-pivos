@@ -38,7 +38,6 @@
 #endif
 
 #define ALSA_OPTIONS (SND_PCM_NONBLOCK | SND_PCM_NO_AUTO_FORMAT | SND_PCM_NO_AUTO_CHANNELS | SND_PCM_NO_AUTO_RESAMPLE)
-#define ALSA_PERIODS 8
 
 #define ALSA_MAX_CHANNELS 16
 static enum AEChannel ALSAChannelMap[ALSA_MAX_CHANNELS + 1] = {
@@ -349,69 +348,25 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
     }
   }
 
-  unsigned int periods;
   snd_pcm_uframes_t periodSize, bufferSize;
-
-  snd_pcm_hw_params_get_periods_min(hw_params, &periods, NULL);
-  snd_pcm_hw_params_get_period_size_min(hw_params, &periodSize, NULL);
-  snd_pcm_hw_params_get_buffer_size_min(hw_params, &bufferSize);
-  CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Min: periodSize %lu, periods %u, bufferSize %lu", periodSize, periods, bufferSize);
-
-  snd_pcm_hw_params_get_periods_max(hw_params, &periods, NULL);
-  snd_pcm_hw_params_get_period_size_max(hw_params, &periodSize, NULL);
-  snd_pcm_hw_params_get_buffer_size_max(hw_params, &bufferSize);
-  CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Max: periodSize %lu, periods %u, bufferSize %lu", periodSize, periods, bufferSize);
-
   snd_pcm_hw_params_get_buffer_size_max(hw_params, &bufferSize);
 
-  bufferSize  = std::min(bufferSize, (snd_pcm_uframes_t)8192);
-  periodSize  = bufferSize / ALSA_PERIODS;
-  periods     = ALSA_PERIODS;
+  bufferSize  = std::min(bufferSize, (snd_pcm_uframes_t) 256 * 1024);
+  periodSize  = 1024;
 
-  CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Req: periodSize %lu, periods %u, bufferSize %lu", periodSize, periods, bufferSize);
+  CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Request: periodSize %lu, bufferSize %lu", periodSize, bufferSize);
 
-  /* work on a copy of the hw params */
-  snd_pcm_hw_params_t *hw_params_copy;
-  snd_pcm_hw_params_alloca(&hw_params_copy);
+  /* try to set the period size and the buffer size*/
+  snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params, &periodSize, NULL);
+  snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params, &bufferSize);
 
-  /* try to set the buffer size then the period size */
-  snd_pcm_hw_params_copy(hw_params_copy, hw_params);
-  snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params_copy, &bufferSize);
-  snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params_copy, &periodSize, NULL);
-  snd_pcm_hw_params_set_periods_near    (m_pcm, hw_params_copy, &periods   , NULL);
-  if (snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
+  if(snd_pcm_hw_params(m_pcm, hw_params) != 0)
   {
-    /* try to set the period size then the buffer size */
-    snd_pcm_hw_params_copy(hw_params_copy, hw_params);
-    snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params_copy, &periodSize, NULL);
-    snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params_copy, &bufferSize);
-    snd_pcm_hw_params_set_periods_near    (m_pcm, hw_params_copy, &periods   , NULL);
-    if (snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
-    {
-      /* try to just set the buffer size */
-      snd_pcm_hw_params_copy(hw_params_copy, hw_params);
-      snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params_copy, &bufferSize);
-      snd_pcm_hw_params_set_periods_near    (m_pcm, hw_params_copy, &periods   , NULL);
-      if (snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
-      {
-        /* try to just set the period size */
-        snd_pcm_hw_params_copy(hw_params_copy, hw_params);
-        snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params_copy, &periodSize, NULL);
-        snd_pcm_hw_params_set_periods_near    (m_pcm, hw_params_copy, &periods   , NULL);
-        if (snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
-        {
-          CLog::Log(LOGERROR, "CAESinkALSA::InitializeHW - Failed to set the parameters");
-          return false;
-        }
-      }
-    }
+    CLog::Log(LOGERROR, "CAESinkALSA::InitializeHW - Failed to set the parameters");
+    return false;
   }
 
-  snd_pcm_hw_params_get_period_size(hw_params_copy, &periodSize, NULL);
-  snd_pcm_hw_params_get_buffer_size(hw_params_copy, &bufferSize);
-  
-
-  CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Got: periodSize %lu, periods %u, bufferSize %lu", periodSize, periods, bufferSize);
+  CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Got: periodSize %lu, bufferSize %lu", periodSize, bufferSize);
 
   /* set the format parameters */
   format.m_sampleRate   = sampleRate;
