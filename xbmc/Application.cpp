@@ -1578,7 +1578,6 @@ bool CApplication::StartAirplayServer()
       std::vector<std::pair<std::string, std::string> > txt;
 
       std::string mac_address(m_network.GetDefaultConnectionMacAddress());
-      txt.push_back(std::make_pair("deviceid", m_network.GetDefaultConnectionMacAddress()));
       if (mac_address.empty())
         mac_address = "FF:FF:FF:FF:FF:F2";
       txt.push_back(std::make_pair("deviceid", mac_address));
