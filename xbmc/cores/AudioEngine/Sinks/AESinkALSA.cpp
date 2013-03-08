@@ -350,20 +350,75 @@ bool CAESinkALSA::InitializeHW(AEAudioFormat &format)
 
   snd_pcm_uframes_t periodSize, bufferSize;
   snd_pcm_hw_params_get_buffer_size_max(hw_params, &bufferSize);
+  snd_pcm_hw_params_get_period_size_max(hw_params, &periodSize, NULL);
 
-  bufferSize  = std::min(bufferSize, (snd_pcm_uframes_t) 256 * 1024);
-  periodSize  = 1024;
+  /*
+   We want to make sure, that we have approx 500 to 800 ms Buffer with
+   a periodSize of approx 100 ms.
+   It is calced:
+   periodSize = sampleRate / 10
+   buffersize = periodSize * 1 frame * 8.
+  */
+  periodSize  = std::min(periodSize, (snd_pcm_uframes_t) sampleRate / 10);
+  bufferSize  = std::min(bufferSize, (snd_pcm_uframes_t) periodSize * 8);
+
+  /*
+     According to upstream we should set buffer size first - so make sure it is always at least
+     double of period size to not get underruns
+  */
+  periodSize = std::min(periodSize, bufferSize / 2);
 
   CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Request: periodSize %lu, bufferSize %lu", periodSize, bufferSize);
 
-  /* try to set the period size and the buffer size*/
-  snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params, &periodSize, NULL);
-  snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params, &bufferSize);
+  snd_pcm_hw_params_t *hw_params_copy;
+  snd_pcm_hw_params_alloca(&hw_params_copy);
+  snd_pcm_hw_params_copy(hw_params_copy, hw_params); // copy what we have and is already working
 
-  if(snd_pcm_hw_params(m_pcm, hw_params) != 0)
+  // first trying bufferSize, PeriodSize
+  // for more info see here:
+  // http://mailman.alsa-project.org/pipermail/alsa-devel/2009-September/021069.html
+  // the last three tries are done as within pulseaudio
+
+  // backup periodSize and bufferSize first. Restore them after every failed try
+  snd_pcm_uframes_t periodSizeTemp, bufferSizeTemp;
+  periodSizeTemp = periodSize;
+  bufferSizeTemp = bufferSize;
+  if (snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params_copy, &bufferSize) != 0
+    || snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params_copy, &periodSize, NULL) != 0
+    || snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
   {
-    CLog::Log(LOGERROR, "CAESinkALSA::InitializeHW - Failed to set the parameters");
-    return false;
+    bufferSize = bufferSizeTemp;
+    periodSize = periodSizeTemp;
+    // retry with PeriodSize, bufferSize
+    snd_pcm_hw_params_copy(hw_params_copy, hw_params); // restore working copy
+    if (snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params_copy, &periodSize, NULL) != 0
+      || snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params_copy, &bufferSize) != 0
+      || snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
+    {
+      // try only periodSize
+      periodSize = periodSizeTemp;
+      snd_pcm_hw_params_copy(hw_params_copy, hw_params); // restore working copy
+      if(snd_pcm_hw_params_set_period_size_near(m_pcm, hw_params_copy, &periodSize, NULL) != 0
+        || snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
+      {
+        // try only BufferSize
+        bufferSize = bufferSizeTemp;
+        snd_pcm_hw_params_copy(hw_params_copy, hw_params); // restory working copy
+        if (snd_pcm_hw_params_set_buffer_size_near(m_pcm, hw_params_copy, &bufferSize) != 0
+          || snd_pcm_hw_params(m_pcm, hw_params_copy) != 0)
+        {
+          // set default that Alsa would choose
+          CLog::Log(LOGWARNING, "CAESinkAlsa::IntializeHW - Using default alsa values - set failed");
+          if (snd_pcm_hw_params(m_pcm, hw_params) != 0)
+          {
+            CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Could not init a valid sink");
+            return false;
+          }
+        }
+      }
+      // reread values when alsa default was kept
+      snd_pcm_get_params(m_pcm, &bufferSize, &periodSize);
+    }
   }
 
   CLog::Log(LOGDEBUG, "CAESinkALSA::InitializeHW - Got: periodSize %lu, bufferSize %lu", periodSize, bufferSize);
