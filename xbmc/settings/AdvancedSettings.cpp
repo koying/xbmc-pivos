@@ -222,9 +222,9 @@ void CAdvancedSettings::Initialize()
   m_iVideoLibraryDateAdded = 1; // prefer mtime over ctime and current time
 
   m_recentlyAddedMusicPath = "musicdb://songs/";
-  m_recentlyAddedMoviePath = "videodb://recentlyaddedmovies/";
-  m_recentlyAddedEpisodePath = "videodb://recentlyaddedepisodes/";
-  m_recentlyAddedMusicVideoPath = "videodb://recentlyaddedmusicvideos/";
+  m_recentlyAddedMoviePath = "videodb://4/";
+  m_recentlyAddedEpisodePath = "videodb://5/";
+  m_recentlyAddedMusicVideoPath = "videodb://6/";
 
   m_iTuxBoxStreamtsPort = 31339;
   m_bTuxBoxAudioChannelSelection = false;
